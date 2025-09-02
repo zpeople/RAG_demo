@@ -116,7 +116,7 @@ def load_embeddings_chroma(embedding_name, persist_dir):
 # %%
 @skip_execution(IS_SKIP)
 def test_chroma():
-    path = "../datasets/test.pdf"
+    path = "../datasets/tangshi.pdf"
     vector_path ="../db/chroma_db"
     embedding_name="bge-Small"
     data = load_document(path)
@@ -160,7 +160,7 @@ def load_embeddings_faiss( embedding_name,vector_db_path):
 # %%
 @skip_execution(IS_SKIP)
 def test_faiss():
-    path = "../datasets/test.pdf"
+    path = "../datasets/tangshi.pdf"
     vector_path ="../db/faiss_db"
     embedding_name="bge-Small"
     data = load_document(path)
