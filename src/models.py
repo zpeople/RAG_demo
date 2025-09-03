@@ -1,6 +1,22 @@
-# %%
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[ ]:
+
+
 import os
 import sys
+try:
+    get_ipython
+    current_dir = os.getcwd()
+except NameError:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Set path，temporary path expansion
+project_dir = os.path.abspath(os.path.join(current_dir, '..'))
+if project_dir not in sys.path:
+    sys.path.append(project_dir)
+
 import time
 from typing import Dict, Any, Mapping, Optional, List
 
@@ -12,13 +28,21 @@ from vllm import SamplingParams
 
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
+from langchain.chains import RetrievalQA
+
 from tool import skip_execution
+from Embedding import load_embeddings_faiss,load_embeddings_chroma
 
-# %%
+
+# In[ ]:
+
+
 MODEL_NAME ="Qwen/Qwen3-0.6B"
-IS_SKIP=False
+IS_SKIP=True
 
-# %%
+
+# In[ ]:
+
 
 def print_outputs(outputs):
     for output in outputs:
@@ -40,17 +64,17 @@ def download_model(localpath,modelname):
     
 def get_llm_model(
         prompt: str = None,
-        model: str = None,
+        model_name: str = None,
         temperature: float = 0.0,
         max_token: int = 2048,
         n_ctx: int = 512):
     """
     根据模型名称去加载模型，返回response数据
     """
-    model_path = os.path.join("../model",model)
+    model_path = os.path.join(project_dir,"model",model_name)
     print(model_path)
     if not os.path.exists(model_path):
-        download_model(model_path,model)
+        download_model(model_path,model_name)
 
     # 配置采样参数
     sampling_params = SamplingParams(
@@ -63,9 +87,9 @@ def get_llm_model(
     llm = VLLM(
         model=model_path,
         tensor_parallel_size=1,  # 根据GPU数量调整
-        gpu_memory_utilization=0.9,
+        gpu_memory_utilization=0.8,
         max_num_batched_tokens=n_ctx,
-        max_model_len=10000,
+        max_model_len=n_ctx,
     )
     
     start = time.time()
@@ -91,15 +115,20 @@ def get_llm_model(
 
 
 
-# %%
+# In[ ]:
+
+
 @skip_execution(IS_SKIP)
 def test_get_llm():
     outputs =get_llm_model("你是谁",MODEL_NAME,0.8,1024,512)
     print_outputs(outputs)
 
-test_get_llm()
+# test_get_llm()
 
-# %%
+
+# In[ ]:
+
+
 class QwenLLM(LLM):
     """
     基于VLLM的自定义QwenLLM
@@ -110,7 +139,7 @@ class QwenLLM(LLM):
     # 温度系数
     temperature: float = 0.8
     # 窗口大小
-    n_ctx :int =2048
+    n_ctx :int =10000
     # token大小
     max_tokens:int= 1024
     # 并行计算数量
@@ -126,15 +155,15 @@ class QwenLLM(LLM):
 
     def _initialize_llm(self):
         """初始化VLLM实例"""
-        model_path = os.path.join("../model",self.model_name)
+        model_path = os.path.join(project_dir,"model",self.model_name)
         print("qwen_path:", model_path)
         
         self._llm = VLLM(
             model=model_path,
             tensor_parallel_size=self.tensor_parallel_size,
-            gpu_memory_utilization=0.9,
+            gpu_memory_utilization=0.8,
             max_num_batched_tokens=self.n_ctx,
-            max_model_len=10000,
+            max_model_len=self.n_ctx,
             **self.model_kwargs
         )
 
@@ -189,7 +218,7 @@ class QwenLLM(LLM):
         return {**{"model_name": self.model_name}, **self._default_params}
 
 
-# %%
+# In[ ]:
 
 
 @skip_execution(IS_SKIP)
@@ -212,6 +241,96 @@ def test_with_langchain():
     print(f"LangChain测试结果: {result}")
 
 
-test_with_langchain()
+# test_with_langchain()
+
+
+# In[ ]:
+
+
+# 从标志结束的位置开始截取
+def extract_after_flag(text, flag):
+    # 找到标志的起始索引
+    index = text.find(flag)
+    if index != -1:
+        return text[index + len(flag):]
+    return ""  # 如果没有找到标志，返回空字符串
+
+
+
+def ask_and_get_answer_from_local(model_name, vector_db, prompt,template, top_k=5):
+    """
+    从本地加载大模型
+    :param model_name: 模型名称
+    :param vector_db:
+    :param prompt:
+    :param top_k:
+    :return:
+    """
+    llm = QwenLLM(model_name=model_name, temperature=0.4)
+    if not IS_SKIP:#  创建基础提示模板（无上下文） 直接生成回答 测试的时候用来对比输出
+        prompt_template = PromptTemplate(
+            input_variables=["question"],
+            template=template.replace("{context}\n", "")  # 移除上下文占位符
+        )
+        
+        prompt_text = prompt_template.format(question=prompt)
+        direct_answer = llm(prompt_text)  
+        print(f"direct answers: {direct_answer}")
+
+    # RAG 
+    docs_and_scores = vector_db.similarity_search_with_score(prompt, k=top_k)
+    print("docs_and_scores: ", docs_and_scores)
+    # knowledge = [doc.page_content for doc in docs_and_scores]
+    # print("检索到的知识：", knowledge)
+
+    prompt_template = PromptTemplate(input_variables=["context", "question"], template=template)
+    retriever = vector_db.as_retriever(search_type='similarity', search_kwargs={'k': top_k})
+    chain = RetrievalQA.from_chain_type(llm=llm,
+                                        chain_type="stuff",
+                                        retriever=retriever,
+                                        chain_type_kwargs={"prompt": prompt_template},
+                                        return_source_documents=True)
+    answer = chain({"query": prompt, "top_k": top_k})
+    # answer = chain.run(prompt)
+    # answer = answer['choices'][0]['message']['content']
+    answer = answer['result']
+    print(f"answers: {answer}")
+    answer =extract_after_flag(answer,"</think>")
+    return answer
+
+
+
+
+
+
+# In[ ]:
+
+
+DEFAULT_TEMPLATE = """
+        你是一个聪明的超级智能助手，请用专业且富有逻辑顺序的句子回复，并以中文形式且markdown形式输出。
+        检索到的信息：
+        {context}
+        问题：
+        {question}
+    """
+prompt ="'少小离家老大回'的下一句诗是什么"
+embedding_name ="BAAI/bge-small-zh"
+
+@skip_execution(IS_SKIP)
+def test_getRagAnswer_faiss():
+    faiss_db = load_embeddings_faiss(embedding_name,vector_db_path=os.path.join(project_dir,"db/faiss_db"))
+    ask_and_get_answer_from_local(MODEL_NAME,faiss_db,prompt,DEFAULT_TEMPLATE)
+
+@skip_execution(IS_SKIP)
+def test_getRagAnswer_chroma():
+    chroma_db = load_embeddings_chroma(embedding_name,persist_dir=os.path.join(project_dir,"db/chroma_db"))
+    ask_and_get_answer_from_local(MODEL_NAME,chroma_db,prompt,DEFAULT_TEMPLATE)
+
+test_getRagAnswer_chroma()
+
+
+# In[ ]:
+
+
 
 

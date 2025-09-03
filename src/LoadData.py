@@ -1,18 +1,34 @@
-# %% [markdown]
+#!/usr/bin/env python
+# coding: utf-8
+
 # 加载文件：使用langchain下的document_loaders加载pdf、docs、txt、md等格式文件
 # 
 # 文本分块：分块的方式有很多，选择不同的分块方法、分块大小、chunk_overlap，对最后的检索结果有影响
 
-# %%
+# In[ ]:
+
+
 import os
+import sys
+try:
+    get_ipython
+    current_dir = os.getcwd()
+except NameError:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Set path，temporary path expansion
+project_dir = os.path.abspath(os.path.join(current_dir, '..'))
+if project_dir not in sys.path:
+    sys.path.append(project_dir)
+
 from tool import skip_execution
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, UnstructuredFileLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-IS_SKIP =False
+IS_SKIP =True
 
-# %%
 
+# In[21]:
 
 
 def load_document(file):
@@ -51,10 +67,14 @@ def chunk_data(data, chunk_size=256, chunk_overlap=150):
     return chunks
 
 
-# %%
+# In[22]:
+
+
 @skip_execution(IS_SKIP)
 def test_load():
-    path = "../datasets/test.pdf"
+    path =os.path.join(project_dir,"datasets","test.pdf") 
+
+    print(os.path.abspath(path))
     data = load_document(path)
     print("data pages:",len(data))
     return data
@@ -62,7 +82,10 @@ def test_load():
 data = test_load()
 data
 
-# %%
+
+# In[23]:
+
+
 @skip_execution(IS_SKIP)
 def test_chunk(data):
     chunks = chunk_data(data) 
@@ -70,5 +93,4 @@ def test_chunk(data):
     return chunks
     
 test_chunk(data)
-
 

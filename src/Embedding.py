@@ -1,20 +1,21 @@
-# %%
+#!/usr/bin/env python
+# coding: utf-8
 
-def download_emb_model():
-    from huggingface_hub import snapshot_download
+# In[ ]:
 
-    # 下载 BAAI 官方的 BGE-Small 中文模型（自带 sentence_bert_config.json）
-    snapshot_download(
-        repo_id="BAAI/bge-small-zh", 
-        local_dir="../model/bge-Small",
-        local_dir_use_symlinks=False,  # Windows 必加
-        allow_patterns=["*.json", "*.bin", "*.txt", "*.model"] 
-    )
 
-# download_emb_model()
-
-# %%
 import os
+import sys
+try:
+    get_ipython
+    current_dir = os.getcwd()
+except NameError:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Set path，temporary path expansion
+project_dir = os.path.abspath(os.path.join(current_dir, '..'))
+if project_dir not in sys.path:
+    sys.path.append(project_dir)
 
 from langchain_huggingface import HuggingFaceEmbeddings
 from sentence_transformers import SentenceTransformer
@@ -23,12 +24,31 @@ from langchain_chroma import Chroma
 from LoadData import load_document,chunk_data
 
 from tool import skip_execution
-IS_SKIP =False
+IS_SKIP =True
+embedding_name="BAAI/bge-small-zh"
 
-# %% [markdown]
+
+# In[17]:
+
+
+def download_emb_model(name):
+    from huggingface_hub import snapshot_download
+
+    # 下载 BAAI 官方的 BGE-Small 中文模型（自带 sentence_bert_config.json）
+    snapshot_download(
+        repo_id=name, 
+        local_dir=os.path.join(project_dir,"model",name),
+        local_dir_use_symlinks=False,  # Windows 必加
+        allow_patterns=["*.json", "*.bin", "*.txt", "*.model"] 
+    )
+
+# download_emb_model(embedding_name)
+
+
 # https://huggingface.co/BAAI/bge-small-zh
 
-# %%
+# In[18]:
+
 
 def get_embedding(embedding_name):
     """
@@ -38,7 +58,7 @@ def get_embedding(embedding_name):
     model_kwargs = {'device': 'cuda'}  
     encode_kwargs = {'normalize_embeddings': True}  # 归一化嵌入向量
     
-    embedding_path = os.path.join('..',"model",embedding_name)
+    embedding_path = os.path.join(project_dir,"model",embedding_name)
     print(embedding_path)
     
     return HuggingFaceEmbeddings(
@@ -50,7 +70,6 @@ def get_embedding(embedding_name):
 
 
 
-# %% [markdown]
 # * 闭源 API 模型	: OpenAIEmbeddings
 #   * OpenAI Ada-002、Anthropic Claude		
 # * 开源本地模型	: HuggingFaceEmbeddings
@@ -58,13 +77,14 @@ def get_embedding(embedding_name):
 # * 云厂商模型	: AliyunEmbeddings
 #   * 阿里云通义千问嵌入、腾讯云向量嵌入	 
 
-# %% [markdown]
 # 使用embedding模型持久化存储，目前常用的中文模型是bge-large-zh-v1.5
 
-# %%
+# In[19]:
+
+
 @skip_execution(IS_SKIP)
 def test_emb(): 
-    embedding=get_embedding("bge-Small")
+    embedding=get_embedding(embedding_name)
           # 测试生成嵌入向量
     test_text = "这是一个测试句子，用于验证嵌入模型是否正常工作。"
     embedding_vector = embedding.embed_query(test_text)
@@ -76,15 +96,20 @@ def test_emb():
     
 test_emb()
 
-# %%
+
+# In[20]:
+
+
 # create embeddings using OpenAIEmbeddings() and save them in a Chroma vector store
-def create_embeddings_chroma(embedding_name, chunks, persist_dir="../db/chroma_db"):
+def create_embeddings_chroma(embedding_name, chunks, persist_dir=os.path.join(project_dir,"db/chroma_db")):
     """
     创建并保存 Chroma 向量库
     """
     # 获取嵌入模型
     embeddings = get_embedding(embedding_name)
-    
+    if not os.path.isdir(persist_dir):
+        os.mkdir(persist_dir)
+
     # 创建向量库时指定保存路径
     vector_store = Chroma.from_documents(
         documents=chunks,
@@ -113,19 +138,22 @@ def load_embeddings_chroma(embedding_name, persist_dir):
     return vector_store
 
 
-# %%
+# In[21]:
+
+
 @skip_execution(IS_SKIP)
 def test_chroma():
-    path = "../datasets/tangshi.pdf"
-    vector_path ="../db/chroma_db"
-    embedding_name="bge-Small"
+    path = os.path.join(project_dir,"datasets/tangshi.pdf") 
+    vector_path =os.path.join(project_dir,"db/chroma_db") 
+
     data = load_document(path)
-    chunks = chunk_data(data) 
+    chunks = chunk_data(data,chunk_size=512,chunk_overlap=100) 
+    print(len(chunks))
     create_embeddings_chroma(embedding_name,chunks,vector_path)
     load_embeddings_chroma(embedding_name,vector_path)
 test_chroma()
 
-# %% [markdown]
+
 # ### Faiss
 # Faiss is a library for efficient similarity search and clustering of dense vectors. It contains algorithms that search in sets of vectors of any size, up to ones that possibly do not fit in RAM. It also contains supporting code for evaluation and parameter tuning. 
 # 
@@ -133,9 +161,10 @@ test_chroma()
 # 
 # https://github.com/facebookresearch/faiss?tab=readme-ov-file
 
-# %%
+# In[22]:
 
-def create_embeddings_faiss( embedding_name, chunks,vector_db_path="../db/faiss_db"):
+
+def create_embeddings_faiss( embedding_name, chunks,vector_db_path=os.path.join(project_dir,"db/faiss_db") ):
     """
     使用FAISS向量数据库，并保存
     """
@@ -157,17 +186,18 @@ def load_embeddings_faiss( embedding_name,vector_db_path):
     db = FAISS.load_local(vector_db_path, embeddings, allow_dangerous_deserialization=True)
     return db
 
-# %%
+
+# In[23]:
+
+
 @skip_execution(IS_SKIP)
 def test_faiss():
-    path = "../datasets/tangshi.pdf"
-    vector_path ="../db/faiss_db"
-    embedding_name="bge-Small"
+    path = os.path.join(project_dir,"datasets/tangshi.pdf") 
+    vector_path =os.path.join(project_dir,"db/faiss_db") 
     data = load_document(path)
-    chunks = chunk_data(data) 
+    chunks = chunk_data(data,chunk_size=512,chunk_overlap=100) 
     create_embeddings_faiss(embedding_name,chunks,vector_path)
     load_embeddings_faiss(embedding_name,vector_path)
     
 test_faiss()
-
 
