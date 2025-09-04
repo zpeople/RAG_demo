@@ -1,0 +1,45 @@
+# 忽略 Python 缓存文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 忽略虚拟环境
+venv/
+env/
+.venv/
+
+# 忽略 Git 相关文件
+.git/
+.gitignore
+
+# 忽略环境变量文件
+.env
+.env.*
+
+# 忽略测试和开发工具配置
+*.log
+*.coverage
+.coverage
+.pytest_cache/
+.mypy_cache/
+.tox/
+.cache/
+.ipynb_checkpoints/
+
+# 忽略 Jupyter Notebook 输出
+*.ipynb
+
+# 忽略系统文件
+.DS_Store
+Thumbs.db
+
+# 忽略构建产物
+dist/
+build/
+*.egg-info/
+
+# 忽略 IDE 配置文件
+.vscode/
+.idea/
+*.swp

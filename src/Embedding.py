@@ -18,17 +18,16 @@ if project_dir not in sys.path:
     sys.path.append(project_dir)
 
 from langchain_huggingface import HuggingFaceEmbeddings
-from sentence_transformers import SentenceTransformer
 from langchain_community.vectorstores import  FAISS
 from langchain_chroma import Chroma
-from LoadData import load_document,chunk_data
+from LoadData import load_document,chunk_data,load_json
 
 from tool import skip_execution
 IS_SKIP =True
 embedding_name="BAAI/bge-small-zh"
 
 
-# In[17]:
+# In[ ]:
 
 
 def download_emb_model(name):
@@ -47,7 +46,7 @@ def download_emb_model(name):
 
 # https://huggingface.co/BAAI/bge-small-zh
 
-# In[18]:
+# In[ ]:
 
 
 def get_embedding(embedding_name):
@@ -79,7 +78,7 @@ def get_embedding(embedding_name):
 
 # 使用embedding模型持久化存储，目前常用的中文模型是bge-large-zh-v1.5
 
-# In[19]:
+# In[ ]:
 
 
 @skip_execution(IS_SKIP)
@@ -97,7 +96,11 @@ def test_emb():
 test_emb()
 
 
-# In[20]:
+# ### Chroma
+# 
+# 优势是以最小成本实现向量数据库的核心价值—— 无需关注底层细节，快速搭建可用的向量检索系统，尤其适合原型开发、中小规模应用或对部署复杂度敏感的场景。
+
+# In[ ]:
 
 
 # create embeddings using OpenAIEmbeddings() and save them in a Chroma vector store
@@ -138,7 +141,7 @@ def load_embeddings_chroma(embedding_name, persist_dir):
     return vector_store
 
 
-# In[21]:
+# In[ ]:
 
 
 @skip_execution(IS_SKIP)
@@ -154,14 +157,76 @@ def test_chroma():
 test_chroma()
 
 
+# In[ ]:
+
+
+def create_embeddings_chroma(embedding_name, chunks, persist_dir=os.path.join(project_dir, "db/chroma_db"), batch_size=1000):
+    embeddings = get_embedding(embedding_name)
+    os.makedirs(persist_dir, exist_ok=True)
+    
+    # 初始化Chroma（如果目录已存在则加载，实现断点续传）
+    if os.path.exists(os.path.join(persist_dir, "chroma.sqlite3")):
+        vector_store = Chroma(
+            persist_directory=persist_dir,
+            embedding_function=embeddings
+        )
+        # 获取已存在的文档数量（用于断点续传）
+        existing_count = vector_store._collection.count()
+        print(f"检测到已有向量库，已包含 {existing_count} 条文档")
+    else:
+        # 新建向量库
+        vector_store = Chroma(
+            persist_directory=persist_dir,
+            embedding_function=embeddings,
+            documents=[]  # 先创建空库
+        )
+        existing_count = 0
+    
+    # 从断点开始处理剩余文档
+    remaining_chunks = chunks[existing_count:]
+    total_batches = (len(remaining_chunks) + batch_size - 1) // batch_size
+    
+    for i in range(total_batches):
+        start = i * batch_size
+        end = start + batch_size
+        batch = remaining_chunks[start:end]
+        
+        # 增量添加批次
+        vector_store.add_documents(batch)
+        
+        # 每10批保存一次（减少IO次数）
+        if (i + 1) % 10 == 0:
+            vector_store.persist()
+            print(f"已处理 {start + end} 条文档，进度：{((i + 1) / total_batches) * 100:.2f}%")
+    
+ 
+    print(f"Chroma 向量库已保存到: {os.path.abspath(persist_dir)}，共 {vector_store._collection.count()} 条文档")
+    return vector_store
+
+
 # ### Faiss
 # Faiss is a library for efficient similarity search and clustering of dense vectors. It contains algorithms that search in sets of vectors of any size, up to ones that possibly do not fit in RAM. It also contains supporting code for evaluation and parameter tuning. 
+# 
+# 向量搜索算法库（纯工具库），专注于高维向量的高效相似性搜索，核心价值是提供优化的索引算法（如 IVF、HNSW、PQ 等），解决 “如何快速从海量向量中找到相似结果” 的技术问题
 # 
 # https://faiss.ai/
 # 
 # https://github.com/facebookresearch/faiss?tab=readme-ov-file
+# 
+# * 暴力搜索（Brute-force）：
+# 索引类型：IndexFlatL2（L2 距离）、IndexFlatIP（内积，可用于余弦相似度）。
+# 特点：精确但速度慢，适合小规模数据（万级以下）。
+# * 倒排文件索引（IVF）：
+# 索引类型：IndexIVFFlat、IndexIVFPQ等。
+# 特点：将向量聚类到多个桶（cluster），搜索时仅在目标桶内进行，平衡速度和精度，适合百万到亿级数据。
+# * 分层导航小世界网络（HNSW）：
+# 索引类型：IndexHNSWFlat。
+# 特点：基于图结构的近似搜索，速度快、精度高，适合高维向量和实时场景。
+# * 乘积量化（PQ）：
+# 索引类型：IndexPQ、IndexIVFPQ等。
+# 特点：将向量分段并量化，大幅降低内存占用，适合超大规模数据（十亿级）。
 
-# In[22]:
+# In[ ]:
 
 
 def create_embeddings_faiss( embedding_name, chunks,vector_db_path=os.path.join(project_dir,"db/faiss_db") ):
@@ -187,7 +252,7 @@ def load_embeddings_faiss( embedding_name,vector_db_path):
     return db
 
 
-# In[23]:
+# In[ ]:
 
 
 @skip_execution(IS_SKIP)
@@ -198,6 +263,21 @@ def test_faiss():
     chunks = chunk_data(data,chunk_size=512,chunk_overlap=100) 
     create_embeddings_faiss(embedding_name,chunks,vector_path)
     load_embeddings_faiss(embedding_name,vector_path)
+    
+test_faiss()
+
+
+# In[ ]:
+
+
+@skip_execution(IS_SKIP)
+def test_faiss():
+    path = os.path.join(project_dir,"datasets","chinese_law_ft_dataset.json") 
+    vector_path =os.path.join(project_dir,"db/law_db") 
+    data = load_json(path)
+    chunks = chunk_data(data,chunk_size=512,chunk_overlap=100) 
+    # create_embeddings_chroma(embedding_name,chunks,vector_path)
+    load_embeddings_chroma(embedding_name,vector_path)
     
 test_faiss()
 

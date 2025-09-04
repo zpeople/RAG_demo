@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
+# In[10]:
 
 
 import os
@@ -34,14 +34,14 @@ from tool import skip_execution
 from Embedding import load_embeddings_faiss,load_embeddings_chroma
 
 
-# In[ ]:
+# In[11]:
 
 
 MODEL_NAME ="Qwen/Qwen3-0.6B"
 IS_SKIP=True
 
 
-# In[ ]:
+# In[12]:
 
 
 def print_outputs(outputs):
@@ -115,7 +115,7 @@ def get_llm_model(
 
 
 
-# In[ ]:
+# In[13]:
 
 
 @skip_execution(IS_SKIP)
@@ -126,7 +126,7 @@ def test_get_llm():
 # test_get_llm()
 
 
-# In[ ]:
+# In[14]:
 
 
 class QwenLLM(LLM):
@@ -139,7 +139,7 @@ class QwenLLM(LLM):
     # 温度系数
     temperature: float = 0.8
     # 窗口大小
-    n_ctx :int =10000
+    n_ctx :int =2048
     # token大小
     max_tokens:int= 1024
     # 并行计算数量
@@ -218,7 +218,7 @@ class QwenLLM(LLM):
         return {**{"model_name": self.model_name}, **self._default_params}
 
 
-# In[ ]:
+# In[15]:
 
 
 @skip_execution(IS_SKIP)
@@ -280,8 +280,8 @@ def ask_and_get_answer_from_local(model_name, vector_db, prompt,template, top_k=
     # RAG 
     docs_and_scores = vector_db.similarity_search_with_score(prompt, k=top_k)
     print("docs_and_scores: ", docs_and_scores)
-    # knowledge = [doc.page_content for doc in docs_and_scores]
-    # print("检索到的知识：", knowledge)
+    knowledge = [doc["page_content"] for doc in docs_and_scores]
+    print("检索到的知识：", knowledge)
 
     prompt_template = PromptTemplate(input_variables=["context", "question"], template=template)
     retriever = vector_db.as_retriever(search_type='similarity', search_kwargs={'k': top_k})
@@ -299,11 +299,7 @@ def ask_and_get_answer_from_local(model_name, vector_db, prompt,template, top_k=
     return answer
 
 
-
-
-
-
-# In[ ]:
+# In[20]:
 
 
 DEFAULT_TEMPLATE = """
@@ -314,6 +310,7 @@ DEFAULT_TEMPLATE = """
         {question}
     """
 prompt ="'少小离家老大回'的下一句诗是什么"
+
 embedding_name ="BAAI/bge-small-zh"
 
 @skip_execution(IS_SKIP)
@@ -324,6 +321,18 @@ def test_getRagAnswer_faiss():
 @skip_execution(IS_SKIP)
 def test_getRagAnswer_chroma():
     chroma_db = load_embeddings_chroma(embedding_name,persist_dir=os.path.join(project_dir,"db/chroma_db"))
+    ask_and_get_answer_from_local(MODEL_NAME,chroma_db,prompt,DEFAULT_TEMPLATE)
+
+test_getRagAnswer_chroma()
+
+
+# In[21]:
+
+
+prompt ="杀人自首以后，怎么判刑"
+# @skip_execution(IS_SKIP)
+def test_getRagAnswer_chroma():
+    chroma_db = load_embeddings_chroma(embedding_name,persist_dir=os.path.join(project_dir,"db/law_db"))
     ask_and_get_answer_from_local(MODEL_NAME,chroma_db,prompt,DEFAULT_TEMPLATE)
 
 test_getRagAnswer_chroma()
