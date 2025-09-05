@@ -29,7 +29,7 @@ import json
 IS_SKIP =True
 
 
-# In[119]:
+# In[ ]:
 
 
 def load_document(file):
@@ -59,7 +59,7 @@ def chunk_data(data, chunk_size=256, chunk_overlap=150):
     :return:
     """
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-    print(len(data))
+    print(f"pages: {len(data)}")
     chunks = text_splitter.split_documents(data)
     return chunks
 

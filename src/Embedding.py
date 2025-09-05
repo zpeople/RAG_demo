@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
+# In[30]:
 
 
 import os
@@ -18,17 +18,27 @@ if project_dir not in sys.path:
     sys.path.append(project_dir)
 
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import  FAISS
 from langchain_chroma import Chroma
+from langchain_community.vectorstores import  FAISS
+from langchain_milvus import Milvus
 from LoadData import load_document,chunk_data,load_json
-
+import math
 from tool import skip_execution
-IS_SKIP =False
-
+IS_SKIP =True
 embedding_name="BAAI/bge-small-zh"
 
 
-# In[ ]:
+# ## Embedding Model
+# ### Download Embedding Model
+
+# * 闭源 API 模型	: OpenAIEmbeddings
+#   * OpenAI Ada-002、Anthropic Claude		
+# * 开源本地模型	: HuggingFaceEmbeddings
+#   * BERT、Sentence-BERT（如 all-MiniLM）		
+# * 云厂商模型	: AliyunEmbeddings
+#   * 阿里云通义千问嵌入、腾讯云向量嵌入	 
+
+# In[31]:
 
 
 def download_emb_model(name):
@@ -45,9 +55,12 @@ def download_emb_model(name):
 # download_emb_model(embedding_name)
 
 
+# ### BGE Model
 # https://huggingface.co/BAAI/bge-small-zh
 
-# In[ ]:
+# 使用embedding模型持久化存储，目前常用的中文模型是bge-large-zh-v1.5
+
+# In[32]:
 
 
 def get_embedding(embedding_name):
@@ -68,16 +81,7 @@ def get_embedding(embedding_name):
     
 
 
-# * 闭源 API 模型	: OpenAIEmbeddings
-#   * OpenAI Ada-002、Anthropic Claude		
-# * 开源本地模型	: HuggingFaceEmbeddings
-#   * BERT、Sentence-BERT（如 all-MiniLM）		
-# * 云厂商模型	: AliyunEmbeddings
-#   * 阿里云通义千问嵌入、腾讯云向量嵌入	 
-
-# 使用embedding模型持久化存储，目前常用的中文模型是bge-large-zh-v1.5
-
-# In[ ]:
+# In[33]:
 
 
 @skip_execution(IS_SKIP)
@@ -95,15 +99,16 @@ def test_emb():
 test_emb()
 
 
+# ## Vector_store
 # ### Chroma
 # 
 # 优势是以最小成本实现向量数据库的核心价值—— 无需关注底层细节，快速搭建可用的向量检索系统，尤其适合原型开发、中小规模应用或对部署复杂度敏感的场景。
 
-# In[ ]:
+# In[34]:
 
 
 # create embeddings using OpenAIEmbeddings() and save them in a Chroma vector store
-def create_embeddings_chroma1(embedding_name, chunks, persist_dir=os.path.join(project_dir,"db/chroma_db")):
+def create_embeddings_chroma(embedding_name, chunks, persist_dir=os.path.join(project_dir,"db/chroma_db")):
     """
     创建并保存 Chroma 向量库
     """
@@ -140,7 +145,7 @@ def load_embeddings_chroma(embedding_name, persist_dir):
     return vector_store
 
 
-# In[ ]:
+# In[35]:
 
 
 '''
@@ -202,7 +207,19 @@ def load_embeddings_chroma(embedding_name, persist_dir):
 #     return vector_store
 
 
-# In[ ]:
+# In[36]:
+
+
+def get_serarch(vecotr_db):
+    results = vecotr_db.similarity_search_with_score(
+        "杜甫", k=3, 
+        )
+    # print(results)
+    for res, score in results:
+        print(f"* [SIM={score:3f}] {res.page_content} [{res.metadata}]")
+
+
+# In[37]:
 
 
 @skip_execution(IS_SKIP)
@@ -214,7 +231,8 @@ def test_chroma():
     chunks = chunk_data(data,chunk_size=512,chunk_overlap=100) 
     print(len(chunks))
     create_embeddings_chroma(embedding_name,chunks,vector_path)
-    # load_embeddings_chroma(embedding_name,vector_path)
+    vecotr_db = load_embeddings_chroma(embedding_name,vector_path)
+    get_serarch(vecotr_db)
 test_chroma()
 
 
@@ -240,7 +258,7 @@ test_chroma()
 # 索引类型：IndexPQ、IndexIVFPQ等。
 # 特点：将向量分段并量化，大幅降低内存占用，适合超大规模数据（十亿级）。
 
-# In[ ]:
+# In[38]:
 
 
 def create_embeddings_faiss( embedding_name, chunks,persist_dir=os.path.join(project_dir,"db/faiss_db") ):
@@ -266,12 +284,10 @@ def load_embeddings_faiss( embedding_name,persist_dir):
     return db
 
 
-# In[15]:
+# Faiss 分批次保存 避免高内存占用
 
+# In[39]:
 
-import math
-import os
-from langchain.vectorstores import FAISS
 
 def create_embeddings_faiss(
     embedding_name,
@@ -279,6 +295,9 @@ def create_embeddings_faiss(
     persist_dir=os.path.join(project_dir, "db/faiss_db"),
     batch_size=1000
 ):
+    """
+    使用FAISS向量数据库，分批次保存
+    """
     embeddings = get_embedding(embedding_name)
     os.makedirs(persist_dir, exist_ok=True)
 
@@ -329,7 +348,7 @@ def create_embeddings_faiss(
     return db
 
 
-# In[ ]:
+# In[40]:
 
 
 @skip_execution(IS_SKIP)
@@ -339,12 +358,13 @@ def test_faiss():
     data = load_document(path)
     chunks = chunk_data(data,chunk_size=512,chunk_overlap=100) 
     create_embeddings_faiss(embedding_name,chunks,vector_path,100)
-    load_embeddings_faiss(embedding_name,vector_path)
-    
+    vecotr_db = load_embeddings_faiss(embedding_name,vector_path)
+    get_serarch(vecotr_db)
+
 test_faiss()
 
 
-# In[ ]:
+# In[41]:
 
 
 @skip_execution(IS_SKIP)
@@ -353,8 +373,255 @@ def test_law():
     vector_path =os.path.join(project_dir,"db/law_db") 
     data = load_json(path)
     chunks = chunk_data(data,chunk_size=512,chunk_overlap=100) 
-    create_embeddings_faiss(embedding_name,chunks,vector_path,batch_size=100)
-    # load_embeddings_chroma(embedding_name,vector_path)
+    create_embeddings_faiss(embedding_name,chunks,vector_path,batch_size=500)
+    load_embeddings_faiss(embedding_name,vector_path)
     
 test_law()
+
+
+# ### Milvus
+# 
+# * 高性能向量检索
+# 
+# 支持近似最近邻搜索（ANN），可处理亿级甚至百亿级向量
+# 
+# 多种索引算法（如 IVF、HNSW、DiskANN）可按需选择
+# 
+# * 分布式架构
+# 
+# 存储与计算分离，支持横向扩展
+# 
+# 云原生设计，适配 Kubernetes，易于部署和弹性伸缩
+# 
+# * 多模态数据支持
+# 
+# 支持稠密向量、稀疏向量、二进制向量
+# 
+# 可结合标量字段进行混合查询（如向量 + 标签过滤
+
+# 
+# ####  milvus服务端
+# mkdir -p ~/milvus && cd ~/milvus
+# wget https://github.com/milvus-io/milvus/releases/download/v2.5.4/milvus-standalone-docker-compose.yml -O docker-compose.yml
+# 
+# #### 启动服务
+# cd ~/milvus
+# 
+# sudo docker compose up -d
+# 
+# lsof -i:9000
+# 
+# sudo kill -9 <PID>
+# #### 验证服务
+# sudo docker compose ps
+# 
+# 
+# ```
+# milvus/volumes 文件夹
+# etcd	元数据存储	保存 collection 定义、字段 schema、分区信息等。是 Milvus 的“脑袋”，负责协调和管理元信息。
+# 
+# minio	向量数据与索引存储	模拟对象存储（兼容 S3），保存 insert_log、index_log、delta_log 等。是 Milvus 的“硬盘”。
+# 
+# standalone	主服务节点	包含所有核心组件（QueryNode、DataNode、IndexNode、RootCoord 等），负责处理客户端请求、向量插入、检索、索引构建等。是 Milvus 的“大脑 + 手脚”。
+# ```
+
+# In[42]:
+
+
+from pymilvus import Collection, MilvusException, connections, db, utility
+
+@skip_execution(IS_SKIP)
+def test_milvus_connect():
+    try:
+        connections.connect(host="localhost", port="19530")
+        collections = utility.list_collections()
+
+        print("✅ 成功连接 Milvus")
+        print(collections)
+    except Exception as e:
+        print("❌ 连接失败：", e)
+
+test_milvus_connect()
+
+
+# In[43]:
+
+
+def delete_collection(collection_name):
+    """删除指定的 Milvus 集合"""
+    
+    if utility.has_collection(collection_name):
+        try:
+            utility.drop_collection(collection_name)
+            print(f"集合 '{collection_name}' 已成功删除")
+            
+            # 验证删除结果
+            if not utility.has_collection(collection_name):
+                print(f"验证: 集合 '{collection_name}' 已不存在")
+                return True
+            else:
+                print(f"警告: 集合 '{collection_name}' 似乎未被删除")
+                return False
+        except Exception as e:
+            print(f"删除集合时发生错误: {e}")
+            return False
+    else:
+        print(f"集合 '{collection_name}' 不存在，无需删除")
+        return True
+    
+def create_milvus_database(db_name):
+    conn = connections.connect(host="localhost", port="19530")
+
+    # Check if the database exists
+    db_name = db_name
+    try:
+        existing_databases = db.list_database()
+        if db_name in existing_databases:
+            print(f"Database '{db_name}' already exists.")
+
+            # Use the database context
+            db.using_database(db_name)
+
+            # Drop all collections in the database
+            collections = utility.list_collections()
+            for collection_name in collections:
+                delete_collection(collection_name)
+
+            db.drop_database(db_name)
+            print(f"Database '{db_name}' has been deleted.")
+        else:
+            print(f"Database '{db_name}' does not exist.")
+            
+        database = db.create_database(db_name)
+        print(f"Database '{db_name}' created successfully.")
+    except MilvusException as e:
+        print(f"An error occurred: {e}")
+    return database
+
+
+# In[44]:
+
+
+from uuid import uuid4
+
+def create_embeddings_milvus(
+    embedding_name,
+    chunks,
+    db_name="milvus_db",
+    collection_name="milvus_collection",
+    batch_size=1000,
+    milvus_host="localhost",
+    milvus_port="19530"
+):
+    # 初始化 embedding 模型
+    embeddings = get_embedding(embedding_name)
+    connection_args={
+                            "host": milvus_host,  # Milvus 服务地址
+                            "port": milvus_port,      # Milvus 服务端口
+                             "token": "root:Milvus",
+                             "db_name": db_name
+    }
+    # 连接 Milvus 服务
+    connections.connect(host=milvus_host, port=milvus_port)
+    db.using_database(db_name)
+    exists=  utility.has_collection(collection_name)
+    print("Collection exists:", exists)
+  
+    if exists:
+        print(f"检测到已有 Milvus collection：{collection_name}，尝试加载...")
+        vector_store = Milvus(collection_name=collection_name, 
+                              embedding_function=embeddings,
+                              connection_args=connection_args,
+                              auto_id=True)
+
+        collection = Collection(collection_name)
+        existing_count =collection.num_entities
+        print(f"已加载 {existing_count} 条文档")
+    else:
+        print("创建新的 Milvus collection...")
+        initial_batch = chunks[:batch_size]
+        if not initial_batch:
+            raise ValueError("chunks 为空，无法初始化 Milvus 向量库")
+        vector_store = Milvus.from_documents(
+            documents=initial_batch,
+            embedding=embeddings,
+            collection_name=collection_name,
+            connection_args=connection_args,
+            )
+        existing_count = len(initial_batch)
+
+    # 边界检查
+    if existing_count >= len(chunks):
+        print("所有 chunks 已处理，无需更新 Milvus 向量库")
+        return vector_store
+
+    remaining_chunks = chunks[existing_count:]
+    total_batches = math.ceil(len(remaining_chunks) / batch_size)
+
+    for i in range(total_batches):
+        start = i * batch_size
+        end = min(start + batch_size, len(remaining_chunks))
+        batch = remaining_chunks[start:end]
+
+        if not batch:
+            print(f"第 {i+1} 批为空，跳过")
+            continue
+        print(f"正在处理第 {i+1}/{total_batches} 批（{len(batch)} 条）")
+        uuids = [str(uuid4()) for _ in range(len(batch))]
+        vector_store.add_documents(documents=batch, ids=uuids)
+     
+    collection = Collection(collection_name)
+    collection.flush()
+    print(f"Milvus 向量库构建完成，共 {collection.num_entities} 条文档")
+    return vector_store
+
+
+# In[45]:
+
+
+def load_embeddings_milvus(embedding_name,    
+                            db_name="milvus_db",
+                            collection_name="milvus_collection",
+                            milvus_host="localhost",
+                            milvus_port="19530"):
+    """
+    加载已保存的 Milvus 向量库
+    """
+    embeddings = get_embedding(embedding_name)
+    connection_args={
+                            "host": milvus_host,  # Milvus 服务地址
+                            "port": milvus_port,      # Milvus 服务端口
+                             "token": "root:Milvus",
+                             "db_name": db_name
+    }
+    connections.connect(host=milvus_host, port=milvus_port)
+    db.using_database(db_name)
+    exists=  utility.has_collection(collection_name)
+  
+    if exists:
+        print(f"检测到已有collection：{collection_name}，尝试加载...")
+        vector_store = Milvus(collection_name=collection_name, 
+                              embedding_function=embeddings,
+                              connection_args=connection_args,
+                              auto_id=True)
+    
+    print(f"Milvus 向量库已从 {db_name}的{collection_name} 加载")
+    return vector_store
+
+
+# In[46]:
+
+
+@skip_execution(IS_SKIP)
+def test_milvus():
+    collection_name= 'milvus_collection'
+    # create_milvus_database("milvus_db")
+    path = os.path.join(project_dir,"datasets/tangshi.pdf") 
+    data = load_document(path)
+    chunks = chunk_data(data,chunk_size=512,chunk_overlap=100) 
+    create_embeddings_milvus(embedding_name,chunks,"milvus_db",collection_name,10)
+    vecotr_db = load_embeddings_milvus(embedding_name)
+    get_serarch(vecotr_db)
+    
+test_milvus()
 

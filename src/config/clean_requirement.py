@@ -21,8 +21,9 @@ output_file = os.path.join( project_dir,"requirements_c.txt")
 core_packages = {
     "fastapi", "torch", "transformers", "pandas", "scikit-learn", "streamlit",
     "openai", "matplotlib", "numpy", "uvicorn",
-    "langchain", "langchain-community", "langchain-chroma", "langchain-huggingface",
-    "torch", "torchvision", "torchaudio", "vllm","transformer","pypdf","sentence_transformers"
+    "langchain", "langchain-community", "langchain-chroma", "langchain-huggingface","langchain-milvus","pymilvus"
+    "torch", "torchvision", "torchaudio", "vllm","transformer","pypdf","sentence_transformers",
+    
 
 }
 

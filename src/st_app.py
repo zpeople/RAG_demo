@@ -153,11 +153,11 @@ if __name__ == "__main__":
         with st.chat_message(msg['role']):
             st.markdown(msg["content"])
 
-    # 加载向量数据库（如果尚未加载）
+    # 加载默认向量数据库（如果尚未加载）
     if 'vs' not in st.session_state:
         try:
             with st.spinner('正在加载向量数据库...'):
-                vector_store = emb.load_embeddings_faiss(emb_name, vector_db_path)
+                vector_store = emb.load_embeddings_Milvus(emb_name)
                 st.session_state.vs = vector_store
                 st.toast('向量数据库加载成功!', icon='😍')
         except Exception as e:

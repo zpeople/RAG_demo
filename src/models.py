@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[10]:
+# In[19]:
 
 
 import os
@@ -31,17 +31,17 @@ from langchain.prompts import PromptTemplate
 from langchain.chains import RetrievalQA
 
 from tool import skip_execution
-from Embedding import load_embeddings_faiss,load_embeddings_chroma
+from Embedding import load_embeddings_faiss,load_embeddings_chroma,load_embeddings_milvus
 
 
-# In[11]:
+# In[20]:
 
 
 MODEL_NAME ="Qwen/Qwen3-0.6B"
 IS_SKIP=True
 
 
-# In[12]:
+# In[21]:
 
 
 def print_outputs(outputs):
@@ -115,7 +115,7 @@ def get_llm_model(
 
 
 
-# In[13]:
+# In[22]:
 
 
 @skip_execution(IS_SKIP)
@@ -126,7 +126,7 @@ def test_get_llm():
 # test_get_llm()
 
 
-# In[14]:
+# In[23]:
 
 
 class QwenLLM(LLM):
@@ -218,7 +218,7 @@ class QwenLLM(LLM):
         return {**{"model_name": self.model_name}, **self._default_params}
 
 
-# In[15]:
+# In[24]:
 
 
 @skip_execution(IS_SKIP)
@@ -244,7 +244,7 @@ def test_with_langchain():
 # test_with_langchain()
 
 
-# In[ ]:
+# In[25]:
 
 
 # 从标志结束的位置开始截取
@@ -260,11 +260,6 @@ def extract_after_flag(text, flag):
 def ask_and_get_answer_from_local(model_name, vector_db, prompt,template, top_k=5):
     """
     从本地加载大模型
-    :param model_name: 模型名称
-    :param vector_db:
-    :param prompt:
-    :param top_k:
-    :return:
     """
     llm = QwenLLM(model_name=model_name, temperature=0.4)
     if not IS_SKIP:#  创建基础提示模板（无上下文） 直接生成回答 测试的时候用来对比输出
@@ -280,8 +275,8 @@ def ask_and_get_answer_from_local(model_name, vector_db, prompt,template, top_k=
     # RAG 
     docs_and_scores = vector_db.similarity_search_with_score(prompt, k=top_k)
     print("docs_and_scores: ", docs_and_scores)
-    knowledge = [doc["page_content"] for doc in docs_and_scores]
-    print("检索到的知识：", knowledge)
+    # knowledge = [doc["page_content"] for doc in docs_and_scores] # 根据不同模型要调整字段
+    # print("检索到的知识：", knowledge)
 
     prompt_template = PromptTemplate(input_variables=["context", "question"], template=template)
     retriever = vector_db.as_retriever(search_type='similarity', search_kwargs={'k': top_k})
@@ -299,7 +294,7 @@ def ask_and_get_answer_from_local(model_name, vector_db, prompt,template, top_k=
     return answer
 
 
-# In[20]:
+# In[ ]:
 
 
 DEFAULT_TEMPLATE = """
@@ -323,17 +318,11 @@ def test_getRagAnswer_chroma():
     chroma_db = load_embeddings_chroma(embedding_name,persist_dir=os.path.join(project_dir,"db/chroma_db"))
     ask_and_get_answer_from_local(MODEL_NAME,chroma_db,prompt,DEFAULT_TEMPLATE)
 
-test_getRagAnswer_chroma()
 
-
-# In[21]:
-
-
-prompt ="杀人自首以后，怎么判刑"
-# @skip_execution(IS_SKIP)
-def test_getRagAnswer_chroma():
-    chroma_db = load_embeddings_chroma(embedding_name,persist_dir=os.path.join(project_dir,"db/law_db"))
-    ask_and_get_answer_from_local(MODEL_NAME,chroma_db,prompt,DEFAULT_TEMPLATE)
+@skip_execution(IS_SKIP)
+def test_getRagAnswer_milvus():
+    milvus_db = load_embeddings_milvus(embedding_name)
+    ask_and_get_answer_from_local(MODEL_NAME,milvus_db,prompt,DEFAULT_TEMPLATE)
 
 test_getRagAnswer_chroma()
 
@@ -341,5 +330,11 @@ test_getRagAnswer_chroma()
 # In[ ]:
 
 
+prompt ="杀人自首以后，怎么判刑"
+@skip_execution(IS_SKIP)
+def test_getRagAnswer_law():
+    chroma_db = load_embeddings_faiss(embedding_name,persist_dir=os.path.join(project_dir,"db/law_db"))
+    ask_and_get_answer_from_local(MODEL_NAME,chroma_db,prompt,DEFAULT_TEMPLATE)
 
+test_getRagAnswer_law()
 
