@@ -21,6 +21,8 @@ from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
 emb_name = "BAAI/bge-small-zh"
 model_name = "Qwen/Qwen3-0.6B"
+online_model_name ="qwen-plus"
+online_URL= "https://dashscope.aliyuncs.com/compatible-mode/v1"
 DEFAULT_TEMPLATE = """
         你是一个聪明的超级智能助手，请用专业且富有逻辑顺序的句子回复，并以中文形式且markdown形式输出。
         检索到的信息：
@@ -31,7 +33,7 @@ DEFAULT_TEMPLATE = """
 
 # 运行应用: streamlit run ./st_app.py
 
-vector_db_path = os.path.join(project_dir, "db", "faiss_db")
+vector_db_path = os.path.join(project_dir, "db", "law_db")
 print(f"vector_db_path: {vector_db_path}")
 
 
@@ -60,6 +62,7 @@ def stream_answer_generator(model_name, vector_db, prompt, top_k):
         # 模拟流式输出的延迟（实际使用中可去掉）
         # time.sleep(0.05)
 
+
 if __name__ == "__main__":
     # 页面设置
     st.set_page_config(page_title="LLM问答应用", page_icon="🤖")
@@ -69,8 +72,8 @@ if __name__ == "__main__":
        
         # 选择本地大模型
         llm = st.selectbox(
-            label="请选择本地大模型",
-            options=(model_name, 'Qwen_q6')
+            label="请选择大模型",
+            options=(model_name,online_model_name, )
         )
         
         # 选择向量数据库
@@ -112,11 +115,7 @@ if __name__ == "__main__":
         # 添加数据按钮
         add_data = st.button('添加数据', on_click=clear_history)
 
-        # 输出方式选择
-        output_type = st.selectbox(
-            "选择输出方式", 
-            ('普通输出', '流式输出')
-        )
+       
 
         if uploaded_file and add_data:  # 如果用户上传了文件
             with st.spinner('正在读取、分割和嵌入文件...'):
@@ -157,7 +156,7 @@ if __name__ == "__main__":
     if 'vs' not in st.session_state:
         try:
             with st.spinner('正在加载向量数据库...'):
-                vector_store = emb.load_embeddings_Milvus(emb_name)
+                vector_store = emb.load_embeddings_faiss(emb_name,vector_db_path)
                 st.session_state.vs = vector_store
                 st.toast('向量数据库加载成功!', icon='😍')
         except Exception as e:
@@ -175,8 +174,8 @@ if __name__ == "__main__":
         vector_store = st.session_state.get('vs')
         
         if vector_store is not None:
-            # 普通输出
-            if output_type == "普通输出":
+            # 本地模型
+            if llm == model_name:
                 with st.spinner('正在生成回答...'):
                     response = M.ask_and_get_answer_from_local(
                         model_name=model_name, 
@@ -192,15 +191,21 @@ if __name__ == "__main__":
                     # 添加到对话历史
                     st.session_state.messages.append({"role": "assistant", "content": response})
             
-            # 流式输出
-            elif output_type == "流式输出":
-                with st.chat_message("assistant"):
-                    # 使用st.write_stream处理生成器
-                    response = st.write_stream(
-                        # stream_answer_generator(model_name, vector_store, prompt, k)
-                    )
-                # 添加完整响应到对话历史
-                st.session_state.messages.append({"role": "assistant", "content": response})
+            # 在线模型
+            elif llm == online_model_name:
+               with st.spinner('正在生成回答...'):
+                    response = M.ask_and_get_answer(online_model_name, 
+                                            url=online_URL,
+                                            vector_db=vector_store, 
+                                            prompt=prompt, 
+                                            template=DEFAULT_TEMPLATE,
+                                            top_k=k,
+                                            )
+                    # 显示助手回答
+                    with st.chat_message("assistant"):
+                        st.markdown(response)
+                    # 添加完整响应到对话历史
+                    st.session_state.messages.append({"role": "assistant", "content": response})
         else:
             st.warning('请先添加数据或等待向量数据库加载完成', icon="⚠️")
     

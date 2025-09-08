@@ -8,7 +8,9 @@
     │   ├── datasets                        # pdf 测试数据集
     │   ├── db
     │   │   ├── chroma_db                   # 向量数据库 chroma
-    │   │   └── faiss_db                    # 向量数据库 faiss
+    │   │   ├── faiss_db                    # 向量数据库 faiss
+    │   │   └── law_db                      # 法律向量数据库 faiss 
+
     │   ├── model                           # 存储下载的模型
     │   ├── src
     │   │   ├── config    
@@ -45,5 +47,12 @@
                                         return_source_documents=True)
 
 ## Embedding.ipynb  
+* embedding model：BAAI/bge-small-zh
+* vector_db:
 保存和加载 Chroma 、Faiss、 Milvus 三种向量库
 在modles里面测试三种不同向量库的搜索和召回
+
+
+## Models.ipynb
+本地部署:qwen 0.6b
+在线模型:qwen plus

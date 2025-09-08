@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[19]:
+# In[ ]:
 
 
 import os
@@ -34,14 +34,14 @@ from tool import skip_execution
 from Embedding import load_embeddings_faiss,load_embeddings_chroma,load_embeddings_milvus
 
 
-# In[20]:
+# In[ ]:
 
 
 MODEL_NAME ="Qwen/Qwen3-0.6B"
 IS_SKIP=True
 
 
-# In[21]:
+# In[ ]:
 
 
 def print_outputs(outputs):
@@ -115,7 +115,7 @@ def get_llm_model(
 
 
 
-# In[22]:
+# In[ ]:
 
 
 @skip_execution(IS_SKIP)
@@ -126,7 +126,7 @@ def test_get_llm():
 # test_get_llm()
 
 
-# In[23]:
+# In[ ]:
 
 
 class QwenLLM(LLM):
@@ -218,7 +218,7 @@ class QwenLLM(LLM):
         return {**{"model_name": self.model_name}, **self._default_params}
 
 
-# In[24]:
+# In[ ]:
 
 
 @skip_execution(IS_SKIP)
@@ -244,7 +244,7 @@ def test_with_langchain():
 # test_with_langchain()
 
 
-# In[25]:
+# In[ ]:
 
 
 # 从标志结束的位置开始截取
@@ -262,6 +262,7 @@ def ask_and_get_answer_from_local(model_name, vector_db, prompt,template, top_k=
     从本地加载大模型
     """
     llm = QwenLLM(model_name=model_name, temperature=0.4)
+    # region 测试用
     if not IS_SKIP:#  创建基础提示模板（无上下文） 直接生成回答 测试的时候用来对比输出
         prompt_template = PromptTemplate(
             input_variables=["question"],
@@ -271,6 +272,7 @@ def ask_and_get_answer_from_local(model_name, vector_db, prompt,template, top_k=
         prompt_text = prompt_template.format(question=prompt)
         direct_answer = llm(prompt_text)  
         print(f"direct answers: {direct_answer}")
+    # endregion
 
     # RAG 
     docs_and_scores = vector_db.similarity_search_with_score(prompt, k=top_k)
@@ -278,8 +280,8 @@ def ask_and_get_answer_from_local(model_name, vector_db, prompt,template, top_k=
     # knowledge = [doc["page_content"] for doc in docs_and_scores] # 根据不同模型要调整字段
     # print("检索到的知识：", knowledge)
 
-    prompt_template = PromptTemplate(input_variables=["context", "question"], template=template)
     retriever = vector_db.as_retriever(search_type='similarity', search_kwargs={'k': top_k})
+    prompt_template = PromptTemplate(input_variables=["context", "question"], template=template)
     chain = RetrievalQA.from_chain_type(llm=llm,
                                         chain_type="stuff",
                                         retriever=retriever,
@@ -323,6 +325,137 @@ def test_getRagAnswer_chroma():
 def test_getRagAnswer_milvus():
     milvus_db = load_embeddings_milvus(embedding_name)
     ask_and_get_answer_from_local(MODEL_NAME,milvus_db,prompt,DEFAULT_TEMPLATE)
+
+test_getRagAnswer_chroma()
+
+
+# In[ ]:
+
+
+from typing import Any, List, Mapping, Optional, Dict
+from langchain.llms.base import LLM
+from langchain.callbacks.manager import CallbackManagerForLLMRun
+from openai import OpenAI
+from pydantic import Field
+BASE_URL= "https://dashscope.aliyuncs.com/compatible-mode/v1"
+ONLINE_MODEL_NAME ="qwen-plus"
+
+
+class OpenAILLM(LLM):
+    """
+    一个将OpenAI API包装为LangChain LLM的自定义类
+    """
+    api_key: Optional[str] = Field(None)
+    base_url:Optional[str] = Field(BASE_URL)
+    model_name: str = Field(ONLINE_MODEL_NAME)
+    temperature: float = Field(0.7)
+    max_tokens: int = Field(1024)
+    
+    def __init__(self, **data: Any):
+        super().__init__(** data)
+        # 配置OpenAI API密钥
+        if self.api_key:
+            OpenAI.api_key = self.api_key
+         
+    @property
+    def _llm_type(self) -> str:
+        """返回LLM类型标识"""
+        return self.model_name
+
+    @property
+    def _identifying_params(self) -> Mapping[str, Any]:
+        """返回用于标识LLM的参数"""
+        return {
+            "model_name": self.model_name,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens
+        }
+
+    def _call(
+        self,
+        prompt: str,
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        **kwargs: Any,
+    ) -> str:
+        """
+        实现调用OpenAI API的核心方法
+        """
+        try:
+            # 调用OpenAI的 completions API
+            client = OpenAI(
+            api_key= self.api_key,
+            base_url=self.base_url,
+            )
+            completion = client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "你是一个智能超级助手，请用[中文]专业的词语回答问题，整体上下文带有逻辑性，并以markdown格式输出",
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    },
+                ],
+               temperature=self.temperature,
+               max_tokens= self.max_tokens
+            )
+            # 提取并返回生成的文本
+            return completion.choices[0].message.content
+            
+        except Exception as e:
+            raise ValueError(f"调用OpenAI API时发生错误: {str(e)}")
+
+    def predict(self, text: str, **kwargs: Any) -> str:
+        """预测方法，与LangChain其他组件兼容"""
+        return self._call(text,** kwargs)
+
+
+
+# In[ ]:
+
+
+def ask_and_get_answer(model_name,url,vector_db, prompt,template,top_k=3,api_key=None ):
+    api_key = (
+            api_key
+            or os.getenv("QWEN_API_KEY")
+            or os.getenv("DASHSCOPE_API_KEY")
+        )
+
+    llm =  OpenAILLM(model_name=model_name,base_url=url,api_key=api_key)
+    # region 测试用
+    if not IS_SKIP:
+        prompt_template = PromptTemplate(
+            input_variables=["question"],
+            template=template.replace("{context}\n", "")  # 移除上下文占位符
+        )
+        
+        prompt_text = prompt_template.format(question=prompt)
+        direct_answer = llm(prompt_text)  
+        print(f"direct answers: {direct_answer}")
+    # endregion
+    retriever = vector_db.as_retriever(search_type='similarity', search_kwargs={'k': top_k})
+    prompt_template = PromptTemplate(input_variables=["context", "question"], template=template)
+    chain = RetrievalQA.from_chain_type(llm=llm,
+                                        chain_type="stuff",
+                                        retriever=retriever,
+                                        chain_type_kwargs={"prompt": prompt_template},
+                                        return_source_documents=True)
+    answer = chain({"query": prompt, "top_k": top_k})
+    answer = answer['result']
+    print(f"answers: {answer}")
+    return answer
+
+
+# In[ ]:
+
+
+@skip_execution(IS_SKIP)
+def test_getRagAnswer_chroma():
+    chroma_db = load_embeddings_chroma(embedding_name,persist_dir=os.path.join(project_dir,"db/chroma_db"))
+    ask_and_get_answer(ONLINE_MODEL_NAME,BASE_URL,chroma_db,prompt,DEFAULT_TEMPLATE)
 
 test_getRagAnswer_chroma()
 
