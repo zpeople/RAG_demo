@@ -1,42 +1,39 @@
-
 # echo "export DASHSCOPE_API_KEY='sk-'" >> ~/.bashrc
 # source ~/.bashrc
 # echo $DASHSCOPE_API_KEY
 
+import asyncio
 # 此处以qwen-plus为例，可按需更换模型名称。
 # 调用文档：https://help.aliyun.com/zh/model-studio/chat/
 # 模型列表：https://help.aliyun.com/zh/model-studio/getting-started/models
 import os
-import asyncio
-from openai import OpenAI
-from openai import AsyncOpenAI
 
-BASE_URL= "https://dashscope.aliyuncs.com/compatible-mode/v1"
-MODEL_NAME ="qwen-plus"
-api_key =""
-api_key = (
-            api_key
-            or os.getenv("QWEN_API_KEY")
-            or os.getenv("DASHSCOPE_API_KEY")
-        )
+from openai import AsyncOpenAI, OpenAI
+
+BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+MODEL_NAME = "qwen-plus"
+api_key = ""
+api_key = api_key or os.getenv("QWEN_API_KEY") or os.getenv("DASHSCOPE_API_KEY")
 if not api_key:
     raise ValueError(
         "未找到 DashScope API‑KEY！请在实例化时传入 api_key "
-        "或设置环境变量 QWEN_API_KEY / DASHSCOPE_API_KEY")
+        "或设置环境变量 QWEN_API_KEY / DASHSCOPE_API_KEY"
+    )
+
 
 # 单轮对话 异步调用 流式输出
-def one_chat(prompt,api_key):
+def one_chat(prompt, api_key):
     client = AsyncOpenAI(
-        api_key= api_key,
-        base_url= BASE_URL,
+        api_key=api_key,
+        base_url=BASE_URL,
     )
 
     async def main():
-        response =  client.chat.completions.create(
+        response = client.chat.completions.create(
             messages=[{"role": "user", "content": f"{prompt}"}],
-            model=MODEL_NAME,  
+            model=MODEL_NAME,
             stream=True,
-            stream_options={"include_usage": True}
+            stream_options={"include_usage": True},
         )
         for chunk in response:
             # print(chunk)
@@ -47,17 +44,13 @@ def one_chat(prompt,api_key):
     asyncio.run(main())
 
 
-
-
 # 初始化对话历史
-def multi_chat(prompt,api_key):
+def multi_chat(prompt, api_key):
     client = AsyncOpenAI(
-    api_key=api_key,
-    base_url=BASE_URL,
+        api_key=api_key,
+        base_url=BASE_URL,
     )
-    chat_history = [
-        {"role": "system", "content": f"{prompt}"}
-    ]
+    chat_history = [{"role": "system", "content": f"{prompt}"}]
 
     async def chat():
         while True:
@@ -71,8 +64,8 @@ def multi_chat(prompt,api_key):
 
             try:
                 response = await client.chat.completions.create(
-                    messages = chat_history,
-                    model = MODEL_NAME,
+                    messages=chat_history,
+                    model=MODEL_NAME,
                 )
                 reply = response.choices[0].message.content
                 print(f"我是AI：{reply}")
@@ -83,8 +76,7 @@ def multi_chat(prompt,api_key):
             except Exception as e:
                 print(f"⚠️ 出错了：{e}")
 
-
     asyncio.run(chat())
 
 
-one_chat('你是一个AI小助手',api_key)
+one_chat("你是一个AI小助手", api_key)
