@@ -13,9 +13,8 @@
 
     │   ├── model                           # 存储下载的模型
     │   ├── src
-    │   │   ├── config    
-    │   │   │   ├── install_pkgs.ipynb      # 配置环境
-    │   │   │   └── ipynb2py.py             # 一键批量ipynb导出py                 
+    │   │   ├── tools    
+    │   │   │   ├── install_pkgs.ipynb      # 配置环境                
     │   │   ├── test                        # 测试代码
     │   │   ├── Embedding.ipynb             # 加载emb模型将chunk数据存为向量数据库  
     │   │   ├── Embedding.py                #（导出的py，readonly）
