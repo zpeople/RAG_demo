@@ -2,10 +2,10 @@
 # source ~/.bashrc
 # echo $DASHSCOPE_API_KEY
 
-import asyncio
 # 此处以qwen-plus为例，可按需更换模型名称。
 # 调用文档：https://help.aliyun.com/zh/model-studio/chat/
 # 模型列表：https://help.aliyun.com/zh/model-studio/getting-started/models
+import asyncio
 import os
 
 from openai import AsyncOpenAI, OpenAI
@@ -29,13 +29,13 @@ def one_chat(prompt, api_key):
     )
 
     async def main():
-        response = client.chat.completions.create(
+        response =await client.chat.completions.create(
             messages=[{"role": "user", "content": f"{prompt}"}],
             model=MODEL_NAME,
             stream=True,
             stream_options={"include_usage": True},
         )
-        for chunk in response:
+        async for chunk in response:
             # print(chunk)
             if chunk.choices:
                 print(chunk.choices[0].delta.content)
@@ -45,7 +45,7 @@ def one_chat(prompt, api_key):
 
 
 # 初始化对话历史
-def multi_chat(prompt, api_key):
+async def multi_chat(prompt, api_key):
     client = AsyncOpenAI(
         api_key=api_key,
         base_url=BASE_URL,
@@ -78,5 +78,5 @@ def multi_chat(prompt, api_key):
 
     asyncio.run(chat())
 
-
-one_chat("你是一个AI小助手", api_key)
+if __name__ == "__main__":
+    one_chat("你是一个AI小助手", api_key)   
