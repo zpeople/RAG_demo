@@ -53,6 +53,7 @@ core_packages = {
     "trl",
     "triton",
     "cut_cross_entropy",
+    "neo4j"
 }
 
 # 常见的开发/测试/Notebook工具包关键词

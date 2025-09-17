@@ -5,9 +5,11 @@ langchain-community==0.3.29
 langchain-huggingface==0.3.1
 langchain-milvus==0.2.1
 matplotlib==3.10.6
+neo4j==5.28.2
 numpy==1.26.4
 openai==1.102.0
 pandas==2.3.2
+pymilvus==2.5.15
 pypdf==6.0.0
 scikit-learn==1.7.1
 streamlit==1.49.1
@@ -15,7 +17,7 @@ torch==2.6.0
 torchaudio==2.6.0
 torchvision==0.21.0
 transformers==4.56.0
+triton==3.2.0
 uvicorn==0.35.0
 vllm==0.8.5.post1
-faiss-gpu==1.7.2
-sentence-transformers
+xformers==0.0.29.post2
