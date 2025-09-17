@@ -16,6 +16,7 @@
     │   │   ├── tools    
     │   │   │   ├── install_pkgs.ipynb      # 配置环境                
     │   │   ├── test                        # 测试代码
+    │   │   ├── graph                       # neo4j 知识图谱
     │   │   ├── Embedding.ipynb             # 加载emb模型将chunk数据存为向量数据库  
     │   │   ├── Embedding.py                #（导出的py，readonly）
     │   │   ├── LoadData.ipynb              # 加载数据 chunk
@@ -55,3 +56,19 @@
 ## Models.ipynb
 本地部署:qwen 0.6b
 在线模型:qwen plus
+
+## Graph RAG
+
+三种方式抽取实体和关系：
+```
+re（正则表达式） 基于明确字符规则匹配，处理结构化文本
+
+spaCy（NLP 工具库） 实体识别（NER）、词性标注等功能，能理解文本语义（如自动识别 “北京” 是地名、“张三” 是人名），且无需从零训练模型
+
+LLM（大语言模型）  处理复杂、模糊的需求（如 “提取用户提到的、需要优先解决的产品故障”），不仅能识别多义、小众术语，还能结合上下文做逻辑判断，甚至排除无效信息
+```
+生成知识图谱: [neo4j graph](src/graph/neo4j_graph.html)
+
+langchain GraphCypherQAChain 检索： 
+
+![graph QA](src/graph/result.png)
